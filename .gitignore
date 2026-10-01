@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.log
+# images and caches are large and re-creatable (see README); the label/split file is kept
+data/*
+!data/labels.csv
+# Kaggle credentials must never be committed
+kaggle.json
+access_token

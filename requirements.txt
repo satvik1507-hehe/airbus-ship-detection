@@ -1,0 +1,11 @@
+numpy
+pandas
+scikit-learn
+opencv-python-headless
+mahotas
+matplotlib
+joblib
+tqdm
+kaggle
+torch
+torchvision
