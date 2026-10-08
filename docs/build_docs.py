@@ -274,181 +274,123 @@ def build_writeup():
 
 
 # ----------------------------------------------------------------- 2. slides
-NAVY, GREY = RGBColor(0x0B, 0x3D, 0x6B), RGBColor(0x44, 0x44, 0x44)
+# Deliberately plain: black text on a white background, no colours, no figures.
+BLACK = RGBColor(0, 0, 0)
 
 
 def build_slides():
+    from pptx.oxml.ns import qn
+    from lxml import etree
+
     prs = Presentation()
     prs.slide_width, prs.slide_height = Inches(13.333), Inches(7.5)
     blank = prs.slide_layouts[6]
 
-    def text(slide, x, y, w, h, lines, size=20, bold=False, color=GREY):
+    def text(slide, x, y, w, h, lines, size=22, bold=False):
         tf = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h)).text_frame
         tf.word_wrap = True
         for i, line in enumerate(lines if isinstance(lines, list) else [lines]):
             p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
             p.text = line
-            p.font.size, p.font.bold, p.font.color.rgb = Pt(size), bold, color
-            p.space_after = Pt(size * 0.45)
-        return tf
+            p.font.size, p.font.bold, p.font.color.rgb, p.font.name = Pt(size), bold, BLACK, "Calibri"
+            p.space_after = Pt(size * 0.5)
 
-    def slide(title, n=[0]):
+    def slide(title, bullets=None, size=22):
         s = prs.slides.add_slide(blank)
-        text(s, 0.6, 0.35, 12.1, 0.9, title, size=32, bold=True, color=NAVY)
-        bar = s.shapes.add_shape(1, Inches(0.6), Inches(1.2), Inches(12.1), Inches(0.05))
-        bar.fill.solid(); bar.fill.fore_color.rgb = NAVY; bar.line.fill.background()
-        n[0] += 1
-        text(s, 0.6, 7.0, 12.1, 0.4, f"{TEAM}   ·   Airbus Ship Detection   ·   {n[0] + 1}", size=11)
+        text(s, 0.7, 0.45, 12, 0.9, title, size=32, bold=True)
+        if bullets:
+            text(s, 0.7, 1.5, 11.9, 5.6, ["•  " + b for b in bullets], size=size)
         return s
 
-    def bl(s, items, x=0.6, y=1.5, w=12.1, h=5.3, size=20):
-        text(s, x, y, w, h, ["•  " + i for i in items], size=size)
+    def border(cell):
+        tcPr = cell._tc.get_or_add_tcPr()
+        for i, edge in enumerate(("a:lnL", "a:lnR", "a:lnT", "a:lnB")):   # must precede the fill
+            ln = etree.Element(qn(edge), w="9525")
+            fill = etree.SubElement(ln, qn("a:solidFill"))
+            etree.SubElement(fill, qn("a:srgbClr"), val="000000")
+            tcPr.insert(i, ln)
 
-    def pic(s, name, x, y, w=None, h=None):
-        kw = {}
-        if w: kw["width"] = Inches(w)
-        if h: kw["height"] = Inches(h)
-        s.shapes.add_picture(str(FIG / name), Inches(x), Inches(y), **kw)
-
-    def tbl(s, rows, x, y, w, h, size=13, bold_cells=()):
-        t = s.shapes.add_table(len(rows), len(rows[0]), Inches(x), Inches(y), Inches(w), Inches(h)).table
+    def table(s, rows, y=1.5, col_w=None, size=16):
+        n_rows, n_cols = len(rows), len(rows[0])
+        col_w = col_w or [11.9 / n_cols] * n_cols
+        shape = s.shapes.add_table(n_rows, n_cols, Inches(0.7), Inches(y), Inches(sum(col_w)),
+                                   Inches(0.45 * n_rows))
+        t = shape.table
+        t.first_row = t.horz_banding = False
+        for c, w in enumerate(col_w):
+            t.columns[c].width = Inches(w)
         for r, row in enumerate(rows):
             for c, val in enumerate(row):
                 cell = t.cell(r, c)
+                cell.fill.solid()
+                cell.fill.fore_color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
                 cell.text = str(val)
                 f = cell.text_frame.paragraphs[0].font
-                f.size = Pt(size)
-                f.bold = r == 0 or (r, c) in bold_cells
+                f.size, f.color.rgb, f.name, f.bold = Pt(size), BLACK, "Calibri", r == 0
+                border(cell)
 
-    # 1 title
+    # 1 - title
     s = prs.slides.add_slide(blank)
-    text(s, 0.8, 2.0, 11.7, 1.6, "Airbus Ship Detection", size=50, bold=True, color=NAVY)
-    text(s, 0.8, 3.2, 11.7, 0.8, "Traditional Machine Learning vs. Convolutional Neural Networks", size=26)
-    text(s, 0.8, 4.6, 11.7, 1.6, [COURSE, TEAM, MEMBERS,
-                                  "Reference: Chen, Zheng, Zhou – Stanford CS229 project, 2018"], size=18)
+    text(s, 0.7, 2.2, 12, 1.2, "Airbus Ship Detection", size=44, bold=True)
+    text(s, 0.7, 3.3, 12, 0.7, "Traditional Machine Learning vs. Convolutional Neural Networks", size=24)
+    text(s, 0.7, 4.6, 12, 1.8, [COURSE, TEAM, MEMBERS], size=18)
 
-    s = slide("Problem statement")
-    bl(s, ["Given a satellite image, decide: does it contain at least one ship?  (binary classification)",
-           "Why: maritime monitoring – illegal fishing, piracy, accident response, traffic management",
-           "Why it is hard: ships are tiny, scenes vary (open sea, docks, clouds, haze, wakes)",
-           "Question we answer: do hand-engineered features + classical models compete with CNNs "
-           "that learn features from pixels?",
-           "We reproduce the Stanford CS229 study on a laptop-sized subset of the same data"])
+    slide("Problem statement", [
+        "Given a satellite image, decide whether it contains at least one ship (binary classification)",
+        "Compare classical models on hand-engineered features with CNNs that learn features from pixels",
+        "Reproduces a Stanford CS229 project (Chen, Zheng, Zhou, 2018)",
+    ])
 
-    s = slide("Dataset")
-    bl(s, ["Kaggle Airbus Ship Detection Challenge: 192,555 images, 768×768 RGB, 31 GB",
-           "Labels: CSV of run-length-encoded ship masks; no mask = no ship (22% have a ship)",
-           f"Our subset: {N:,} images (≈0.6 GB download), labels from the official CSV",
-           f"Ship-enriched: {pct(SHIP)} ship / {pct(1 - SHIP)} no ship → baseline accuracy {pct(BASE)}",
-           f"Resized to 256×256; stratified 7:3:5 split → {N_TR:,} train / {N_DV:,} dev / {N_TE:,} test"],
-       w=7.2, size=18)
-    pic(s, "sample_images.png", 7.9, 1.6, w=5.1)
-    pic(s, "class_balance.png", 8.9, 4.0, h=2.9)
+    slide("Dataset", [
+        "Kaggle Airbus Ship Detection Challenge: 192,555 satellite images (768×768), 31 GB",
+        "Labels from the official mask CSV: at least one ship mask = Ship, otherwise No ship",
+        f"Our subset: {N:,} images, resized to 256×256",
+        f"{pct(SHIP)} Ship / {pct(1 - SHIP)} No ship",
+        f"Stratified 7:3:5 split: {N_TR:,} train / {N_DV:,} dev / {N_TE:,} test",
+    ])
 
-    s = slide("Pipeline")
-    bl(s, ["download_data  →  subset, resize to 256×256, labels, train/dev/test split",
-           "features  →  colour histogram, Haralick texture, Hu moments, raw pixels",
-           "train_traditional  →  LDA, KNN, Naive Bayes, Random Forest, SVM × 8 feature sets + 10-fold CV",
-           "train_cnn  →  TL-CNN (frozen DenseNet-169) and SIM-CNN (from scratch)",
-           "evaluate_cnn  →  threshold scan on dev, test metrics, confusion matrices",
-           "demo  →  live prediction on unseen images with all three best models",
-           "One command runs everything: python run_all.py   (settings in config.py, seeds fixed)"], size=19)
+    slide("Approach", [
+        "Hand-engineered features: colour histogram (512), Haralick texture (13), Hu moments (7)",
+        "Classical models: LDA, k-NN (k = 5), Naive Bayes, Random Forest (70 trees), SVM (RBF)",
+        f"SIM-CNN: 4 conv + max-pool layers, FC(128), FC(1); {P_SIM:,} parameters, trained from scratch",
+        f"TL-CNN: frozen ImageNet DenseNet-169 + small classifier head; {P_TL:,} trained parameters",
+        "CNN training: binary cross-entropy, Adam, batch 64, 30 epochs, best dev-loss checkpoint",
+        "Decision threshold chosen on the dev set; final scores on the untouched test set",
+    ], size=21)
 
-    s = slide("Feature engineering (traditional models)")
-    bl(s, ["His – colour histogram in HSV, 8×8×8 bins = 512 values  →  colour",
-           "Ha – 13 Haralick statistics of the grey-level co-occurrence matrix  →  texture",
-           "Hu – 7 Hu moments of the grey image  →  shape",
-           "Raw – image shrunk to 32×32×3 and flattened = 3,072 values  →  'no feature engineering'",
-           "All are global descriptors: one vector describes the whole image",
-           "Standardised (zero mean, unit variance) with training-set statistics"], w=7.4, size=18)
-    pic(s, "feature_examples.png", 8.1, 2.2, w=5.0)
+    rows, _ = table1_rows()
+    s = slide("Results – classical models (test accuracy)")
+    table(s, rows, col_w=[1.3] + [1.325] * 8, size=15)
 
-    s = slide("Five traditional classifiers")
-    bl(s, ["LDA – Gaussian classes with a shared covariance → linear decision boundary",
-           "k-NN (k = 5) – majority vote of the 5 closest training images (Euclidean distance)",
-           "Naive Bayes – Bayes' rule assuming features are independent given the class",
-           "Random Forest – 70 decision trees on bootstrap samples and random feature subsets, majority vote",
-           "SVM (RBF kernel) – maximum-margin boundary in a non-linear feature space",
-           "Each trained on 8 feature combinations = 40 experiments, plus 10-fold cross-validation"], size=19)
+    def spec(a):
+        d = trad["detail"][f"{a}|{ALL}"]
+        n_pos = int(round(trad["ship_rate_test"] * N_TE))
+        tp = d["recall"] * n_pos
+        fp = tp / d["precision"] - tp if d["precision"] else 0
+        return 1 - fp / (N_TE - n_pos)
 
-    rows, bold = table1_rows()
-    s = slide("Results – traditional models (test accuracy)")
-    tbl(s, rows, 0.6, 1.5, 12.1, 2.6, size=14, bold_cells=bold)
-    bl(s, [f"Random Forest is best: {pct(acc_all['RF'])} with all features (paper: 93%)",
-           f"Feature engineering vs raw pixels: " + ", ".join(f"{a} {100 * FE_GAIN[a]:+.0f}" for a in ALGS) + " points",
-           "'More is less': the 512 correlated histogram bins break Naive Bayes's independence assumption",
-           f"Baseline (always 'ship') = {pct(BASE)}"
-           + (f"; {', '.join(below_base)} with all features falls below it" if below_base else "")],
-       y=4.4, h=2.5, size=17)
-
-    s = slide("10-fold cross-validation (all features)")
-    pic(s, "cv_boxplot.png", 0.6, 1.5, h=5.2)
-    bl(s, [f"{a}: {pct(cv[a]['mean'])} ± {pct(cv[a]['std'])}" for a in ALGS]
-       + ["Random Forest: highest mean and among the smallest spread → most reliable"], x=8.6, w=4.3, size=18)
-
-    s = slide("Two convolutional neural networks")
-    bl(s, ["SIM-CNN – trained from scratch",
-           "    4 × [3×3 conv → ReLU → 2×2 max-pool], filters 16 / 32 / 64 / 128",
-           "    256×256×3 → 16×16×128 → FC(128) → dropout → FC(1) → sigmoid",
-           f"    {P_SIM:,} trainable parameters; augmentation: flip, rotate, shift, zoom, shear, brightness",
-           "TL-CNN – transfer learning",
-           "    ImageNet-pretrained DenseNet-169, all weights frozen (feature extractor)",
-           "    global max-pool → BatchNorm → dropout → FC(128) → FC(1) → sigmoid",
-           f"    only the head is trained: {P_TL:,} parameters",
-           "Both: binary cross-entropy, Adam, batch 64, 30 epochs, LR decay, best-dev-loss checkpoint"], size=18)
-
-    s = slide("CNN training curves")
-    pic(s, "cnn_training_curves.png", 0.6, 1.5, w=9.0)
-    bl(s, [f"TL-CNN: final train acc {pct(hist['tl']['train_acc'][-1])}, best dev acc {pct(max(hist['tl']['dev_acc']))}",
-           f"SIM-CNN: final train acc {pct(hist['sim']['train_acc'][-1])}, best dev acc {pct(max(hist['sim']['dev_acc']))}",
-           "Solid = train, dashed = dev",
-           "We keep the weights of the epoch with the lowest dev loss"], x=9.8, w=3.2, size=15)
-
-    s = slide("Threshold scanning and confusion matrices")
-    pic(s, "threshold_scan.png", 0.6, 1.5, h=3.3)
-    pic(s, "confusion_matrices.png", 5.6, 1.5, h=3.3)
-    bl(s, ["Imbalanced classes → 0.5 is not automatically the best cut-off; we scan 0.1–0.9 on the dev set",
-           f"TL-CNN @ {tl['threshold']}: accuracy {pct(tl['accuracy'])}, precision {pct(tl['precision'])}, "
-           f"recall {pct(tl['recall'])}, specificity {pct(tl['specificity'])}",
-           f"SIM-CNN @ {sim['threshold']}: accuracy {pct(sim['accuracy'])}, precision {pct(sim['precision'])}, "
-           f"recall {pct(sim['recall'])}, specificity {pct(sim['specificity'])}"], y=5.0, h=1.9, size=16)
-
-    s = slide("All models on the same test set")
-    pic(s, "model_comparison.png", 0.6, 1.5, w=7.6)
-    tbl(s, [r[:4] for r in summary_rows()], 8.4, 1.5, 4.5, 4.2, size=11)
-    text(s, 0.6, 6.25, 12.1, 0.6, f"Best overall: {best_overall[0]} ({pct(best_overall[1])}).  "
-         f"Best traditional: Random Forest ({pct(acc_all['RF'])}).", size=18, bold=True, color=NAVY)
+    res = [["Model", "Accuracy", "Precision", "Recall", "Specificity", "F1"]]
+    for a, name in (("LDA", "LDA"), ("KNN", "k-NN"), ("NB", "Naive Bayes"),
+                    ("RF", "Random Forest"), ("SVM", "SVM")):
+        d = trad["detail"][f"{a}|{ALL}"]
+        res.append([name, pct(d["accuracy"]), pct(d["precision"]), pct(d["recall"]),
+                    pct(spec(a)), pct(d["f1"])])
+    for m, name in ((tl, "TL-CNN"), (sim, "SIM-CNN")):
+        f1 = 2 * m["precision"] * m["recall"] / (m["precision"] + m["recall"])
+        res.append([name, pct(m["accuracy"]), pct(m["precision"]), pct(m["recall"]),
+                    pct(m["specificity"]), pct(f1)])
+    res.append(["Always 'Ship' (baseline)", pct(BASE), pct(BASE), "100.0%", "0.0%",
+                pct(2 * BASE / (1 + BASE))])
+    s = slide("Results – all models (test set)")
+    table(s, res, col_w=[3.4, 1.7, 1.7, 1.7, 1.7, 1.7], size=16)
 
     s = slide("Comparison with the Stanford report")
-    tbl(s, [["", "Stanford report", "Our reproduction"],
-            ["Images (train / dev / test)", "7,000 / 3,000 / 5,000", f"{N_TR:,} / {N_DV:,} / {N_TE:,}"],
-            ["Class balance", "≈16% ship (natural)", f"{pct(SHIP, 0)} ship (ship-enriched subset)"],
-            ["Best traditional model", "Random Forest, 93%", f"Random Forest, {pct(acc_all['RF'])}"],
-            ["TL-CNN test accuracy", "90%", pct(tl["accuracy"])],
-            ["SIM-CNN test accuracy", "94%", pct(sim["accuracy"])],
-            ["Hardware / framework", "Azure GPU, Keras", "Laptop CPU, PyTorch"]],
-        0.6, 1.5, 12.1, 3.4, size=16)
-    bl(s, ["Same conclusions for traditional models: Random Forest wins, feature engineering helps, Naive Bayes is fragile",
-           ("CNN ranking differs: TL-CNN beat SIM-CNN here, probably because we had about 4× less training data"
-            if tl["accuracy"] > sim["accuracy"] else
-            "Same CNN ranking: the from-scratch network beats the frozen pretrained one"),
-           "Absolute numbers are not directly comparable – different subset and class balance"], y=5.1, h=1.8, size=16)
-
-    s = slide("Conclusions, limitations, future work")
-    bl(s, [f"Random Forest on hand-engineered features is a strong, cheap baseline ({pct(acc_all['RF'])})",
-           f"CNNs: {CNN_SENTENCE}",
-           "Feature choice matters as much as the algorithm; more features can hurt",
-           "Limitations: small ship-enriched subset, CPU-only, one run per model, image-level labels only",
-           "Future work: full dataset, fine-tune the DenseNet backbone, segment/localise ships (U-Net)"], size=20)
-
-    s = slide("Live demo")
-    bl(s, ["python -m src.demo                     → 8 random unseen test images",
-           "python -m src.demo --n 12 --seed 7     → a different selection",
-           "python -m src.demo --image my.jpg      → any image",
-           "Prints P(ship) from Random Forest, TL-CNN and SIM-CNN; shows the images with the verdict"],
-       w=6.4, size=17)
-    if (FIG / "demo.png").exists():
-        pic(s, "demo.png", 7.1, 1.6, w=5.9)
+    table(s, [["", "Stanford report", "Our project"],
+              ["Images (train / dev / test)", "7,000 / 3,000 / 5,000", f"{N_TR:,} / {N_DV:,} / {N_TE:,}"],
+              ["Best classical model", "Random Forest, 93%", f"Random Forest, {pct(acc_all['RF'])}"],
+              ["TL-CNN accuracy", "90%", pct(tl["accuracy"])],
+              ["SIM-CNN accuracy", "94%", pct(sim["accuracy"])]],
+          col_w=[4.3, 3.8, 3.8], size=18)
 
     prs.save(str(DOCS / "Team9_Project35_Slides.pptx"))
 

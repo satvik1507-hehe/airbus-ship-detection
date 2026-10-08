@@ -9,3 +9,4 @@ data/*
 # Kaggle credentials must never be committed
 kaggle.json
 access_token
+.claude/

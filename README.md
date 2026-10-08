@@ -96,6 +96,20 @@ python -m src.demo --image some.jpg    # your own image(s)
 The demo prints P(ship) from the Random Forest, TL-CNN and SIM-CNN for each image and
 shows a picture grid with the SIM-CNN verdict (green = correct, red = wrong).
 
+### Live training demo (about 40 seconds)
+
+```bash
+python -m src.live_training                # ~40 s, 30 epochs
+python -m src.live_training --seconds 60   # slower, easier to narrate
+```
+
+Trains the TL-CNN head from random weights on the cached DenseNet-169 features
+(same training code as `train_cnn.py`) and animates each epoch: loss and accuracy
+curves, the dev-set P(ship) histogram separating, and 12 dev images whose predictions
+turn from guesses into correct answers. It ends by scoring the best epoch on the test
+set. It does not overwrite the trained models in `models/`. It needs
+`data/cache/densenet_*.npy`, created by `python -m src.train_cnn --model tl`.
+
 ## Repository layout
 
 ```
@@ -110,6 +124,7 @@ src/
   evaluate_cnn.py       threshold scanning, test metrics, confusion matrices, curves
   make_figures.py       descriptive figures for the write-up and slides
   demo.py               live demonstration
+  live_training.py      ~40-second animated training run for the live demo
 run_all.py              runs every step in order
 results/                metrics (CSV/JSON) and figures produced by the code
 docs/                   two-page write-up, slide deck, viva guide
